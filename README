@@ -10,7 +10,10 @@ ML_stock_price_prediction/
 │   ├── data_processing/
 |   |   └── data_prep.py
 │   ├── visualisation/   # Scripts or modules for creating plots, charts, etc.
-│   ├── models/          # Scripts or modules defining model architecture, training loops
+|   |   └── plot_utils.py
+│   ├── models/
+|   |   ├── LSTM.py
+│   |   └── train.py
 │   └── utils/           # Utility functions, helpers, configuration
 │
 ├── requirements.txt     # Python dependencies (pip format)

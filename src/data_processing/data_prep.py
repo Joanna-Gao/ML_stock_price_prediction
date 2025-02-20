@@ -1,13 +1,14 @@
-import os
+from typing import List
 import yfinance as yf
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+import torch
 
 
-def load_raw_data(save_data=False):
+def load_raw_data(time_period: List[str], save_data: bool = False) -> pd.DataFrame:
     cost = yf.Ticker('COST')  # using costco because I love costco lol
-    data = cost.history(start='2010-01-01', end='2025-01-01')  # it's now a df
+    data = cost.history(start=time_period[0], end=time_period[1])
 
     # the index for the df is date and time data in NY timezone, normalise it
     data.index = data.index.tz_localized(None)
@@ -15,36 +16,59 @@ def load_raw_data(save_data=False):
     # calculate a mean to use as the stock price everyday
     data['Ave'] = (data['High'] + data['Low']) / 2
 
+    # prep data for LSTM
+    # reshape the data so that it's in shape (n, 1)
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    data['Ave'] = scaler.fit_transform(data['Ave'].values.reshape(-1, 1))
+
     # remove useless columns
     data = data.drop(columns=['Open', 'High', 'Low', 'Close', 'Volume',
                               'Dividends', 'Stock Splits'], axis=1)
 
     if save_data:
-        start = data.index[0].strftime('%Y-%m-%d')
-        end = data.index[-1].strftime('%Y-%m-%d')
-        data.to_csv('costco_ave_stock_price_%s_to_%s' % (start, end))
+        data.to_csv('costco_ave_stock_price_%s_to_%s'
+                    % (time_period[0], time_period[1]))
 
     return data
 
 
-def split_data(data, save_data=False):
-    # reshape the data so that it's in shape (n, 1)
-    data = data.reshape(-1, 1)
+def split_data(price: pd.DataFrame, look_back: int,
+               save_data: bool = False) -> tuple:
 
-    # normalise the data (make them range between 0 and 1)
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    data_scaled = scaler.fit_transform(data)
+    data_raw = price.values
+    data = []
 
-    # split the data into training, validation and testing sets
-    # current ratio is 70%:15%:15%
-    train_split = int(0.7*len(data_scaled))
-    validation_split = int(0.85*len(data_scaled))
-    train_set, validation_set, test_set = np.split(data_scaled,
-                                                   [train_split, validation_split])
+    for index in range(len(data_raw) - look_back):
+        data.append(data_raw[index:index+look_back])
 
-    if save_data:
-        # save the sets
-        np.savez('costco_stock_data_ml_ready.npz', train_set=train_set,
-                 validation_set=validation_set, test_set=test_set)
+    data = np.array(data)
+    # train, validation, test split = 70:15:15
+    train_size = int(0.7 * data.shape[0])
+    validation_end = int(0.85 * data.shape[0])
+
+    x_train = data[:train_size, :-1, :]
+    y_train = data[:train_size, -1, :]
+
+    x_validation = data[train_size:validation_end, :-1, :]
+    y_validation = data[train_size:validation_end, -1, :]
+
+    x_test = data[validation_end:, :-1, :]
+    y_test = data[validation_end:, -1, :]
+
+    # train_set, validation_set, test_set = (x_train, y_train), (x_validation, y_validation), (x_test, y_test)
+
+    # if save_data:
+    #     # save the sets
+    #     np.savez('costco_stock_data_ml_ready.npz', train_set=train_set,
+    #              validation_set=validation_set, test_set=test_set)
+
+    # make data into torch tensors
+    def to_torch_tensor(data):
+        return torch.from_numpy(data).type(torch.Tensor)
+
+    train_set = (to_torch_tensor(x_train), to_torch_tensor(y_train))
+    validation_set = (to_torch_tensor(x_validation),
+                      to_torch_tensor(y_validation))
+    test_set = (to_torch_tensor(x_test), to_torch_tensor(y_test))
 
     return train_set, validation_set, test_set
