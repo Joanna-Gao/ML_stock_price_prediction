@@ -2,24 +2,23 @@ from typing import List
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
 import torch
 
 
-def load_raw_data(time_period: List[str], save_data: bool = False) -> pd.DataFrame:
-    cost = yf.Ticker('COST')  # using costco because I love costco lol
+def load_raw_data(ticker: str, time_period: List[str],
+                  save_data: bool = False) -> pd.DataFrame:
+    try:
+        cost = yf.Ticker(ticker)
+    except Exception as e:
+        print(f"Error: {e}")
+        return
     data = cost.history(start=time_period[0], end=time_period[1])
 
     # the index for the df is date and time data in NY timezone, normalise it
-    data.index = data.index.tz_localized(None)
+    data.index = data.index.tz_localize(None)
 
     # calculate a mean to use as the stock price everyday
     data['Ave'] = (data['High'] + data['Low']) / 2
-
-    # prep data for LSTM
-    # reshape the data so that it's in shape (n, 1)
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    data['Ave'] = scaler.fit_transform(data['Ave'].values.reshape(-1, 1))
 
     # remove useless columns
     data = data.drop(columns=['Open', 'High', 'Low', 'Close', 'Volume',
