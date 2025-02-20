@@ -3,10 +3,12 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import torch
+from torch.utils.data import DataLoader, TensorDataset
 
 
-def load_raw_data(ticker: str, time_period: List[str],
-                  save_data: bool = False) -> pd.DataFrame:
+def load_raw_data(
+    ticker: str, time_period: List[str], save_data: bool = False
+) -> pd.DataFrame:
     try:
         cost = yf.Ticker(ticker)
     except Exception as e:
@@ -18,27 +20,43 @@ def load_raw_data(ticker: str, time_period: List[str],
     data.index = data.index.tz_localize(None)
 
     # calculate a mean to use as the stock price everyday
-    data['Ave'] = (data['High'] + data['Low']) / 2
+    data["Ave"] = (data["High"] + data["Low"]) / 2
 
     # remove useless columns
-    data = data.drop(columns=['Open', 'High', 'Low', 'Close', 'Volume',
-                              'Dividends', 'Stock Splits'], axis=1)
+    data = data.drop(
+        columns=["Open", "High", "Low", "Close", "Volume", "Dividends", "Stock Splits"],
+        axis=1,
+    )
 
     if save_data:
-        data.to_csv('costco_ave_stock_price_%s_to_%s'
-                    % (time_period[0], time_period[1]))
+        data.to_csv(
+            "costco_ave_stock_price_%s_to_%s" % (time_period[0], time_period[1])
+        )
 
     return data
 
 
-def split_data(price: pd.DataFrame, look_back: int,
-               save_data: bool = False) -> tuple:
+def to_torch_tensor(data: np.ndarray) -> torch.Tensor:
+    # make data into torch tensors
+    return torch.from_numpy(data).type(torch.Tensor)
+
+
+def create_loader(
+    x_data: torch.Tensor, y_data: torch.Tensor, batch_size: int, shuffle: bool = True
+) -> DataLoader:
+    dataset = TensorDataset(to_torch_tensor(x_data), to_torch_tensor(y_data))
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+
+def split_data(
+    price: pd.DataFrame, look_back: int, batch_size: int, save_data: bool = False
+) -> (DataLoader, DataLoader, DataLoader, dict):
 
     data_raw = price.values
     data = []
 
     for index in range(len(data_raw) - look_back):
-        data.append(data_raw[index:index+look_back])
+        data.append(data_raw[index : index + look_back])
 
     data = np.array(data)
     # train, validation, test split = 70:15:15
@@ -54,6 +72,16 @@ def split_data(price: pd.DataFrame, look_back: int,
     x_test = data[validation_end:, :-1, :]
     y_test = data[validation_end:, -1, :]
 
+    # Save the original datasets for plotting
+    original_data = {
+        "x_train": x_train,
+        "y_train": y_train,
+        "x_validation": x_validation,
+        "y_validation": y_validation,
+        "x_test": x_test,
+        "y_test": y_test,
+    }
+
     # train_set, validation_set, test_set = (x_train, y_train), (x_validation, y_validation), (x_test, y_test)
 
     # if save_data:
@@ -61,13 +89,8 @@ def split_data(price: pd.DataFrame, look_back: int,
     #     np.savez('costco_stock_data_ml_ready.npz', train_set=train_set,
     #              validation_set=validation_set, test_set=test_set)
 
-    # make data into torch tensors
-    def to_torch_tensor(data):
-        return torch.from_numpy(data).type(torch.Tensor)
+    train_loader = create_loader(x_train, y_train, batch_size=batch_size)
+    validation_loader = create_loader(x_validation, y_validation, batch_size=batch_size)
+    test_loader = create_loader(x_test, y_test, batch_size=batch_size)
 
-    train_set = (to_torch_tensor(x_train), to_torch_tensor(y_train))
-    validation_set = (to_torch_tensor(x_validation),
-                      to_torch_tensor(y_validation))
-    test_set = (to_torch_tensor(x_test), to_torch_tensor(y_test))
-
-    return train_set, validation_set, test_set
+    return train_loader, validation_loader, test_loader, original_data

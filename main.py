@@ -7,42 +7,58 @@ import matplotlib.pyplot as plt
 
 def main():
     ticker = "IBM"
-    time_period = ['2010-01-02','2017-10-11']
+    time_period = ["2010-01-02", "2017-10-11"]
     data = load_raw_data(ticker, time_period)
-    
+
     # normalise the data
     scaler = MinMaxScaler(feature_range=(0, 1))
-    data['Ave'] = scaler.fit_transform(data['Ave'].values.reshape(-1, 1))
-    
+    data["Ave"] = scaler.fit_transform(data["Ave"].values.reshape(-1, 1))
+
     look_back = 500
-    train_set, validation_set, test_set = split_data(data, look_back=look_back)
+    train_loader, val_loader, test_loader, original_data = split_data(
+        data, look_back=look_back
+    )
 
     print("Obtained the data, creating model...")
 
-    model_config = {'input_dim': 1, 'hidden_dim': 32, 'num_layers': 2, 
-                    'output_dim': 1, 'num_epochs': 100}
+    model_config = {
+        "input_dim": 1,
+        "hidden_dim": 32,
+        "num_layers": 2,
+        "output_dim": 1,
+        "num_epochs": 50,
+    }
 
     model = LSTM(
-        input_dim=model_config['input_dim'],
-        hidden_dim=model_config['hidden_dim'],
-        num_layers=model_config['num_layers'],
-        output_dim=model_config['output_dim'],
+        input_dim=model_config["input_dim"],
+        hidden_dim=model_config["hidden_dim"],
+        num_layers=model_config["num_layers"],
+        output_dim=model_config["output_dim"],
     )
     loss_fn = torch.nn.MSELoss()
     optimiser = torch.optim.Adam(model.parameters(), lr=0.01)
 
     print("Model created, starting training...")
 
-    model, loss_hist = train_model(model, model_config, train_set, optimiser, 
-                                   loss_fn, look_back, ticker)
+    model, train_losses, val_losses = train_model(
+        model,
+        model_config,
+        train_loader,
+        val_loader,
+        optimiser,
+        loss_fn,
+        look_back,
+        ticker,
+    )
 
     print("Training complete, plotting the results...")
 
-    plt.plot(loss_hist, label="Training loss")
+    plt.plot(train_losses, label="Training loss")
+    plt.plot(val_losses, label="Validation loss")
 
-    y_test_pred = model(test_set[0])
+    y_test_pred = model(original_data["x_test"])
     y_test_pred = scaler.inverse_transform(y_test_pred.detach().numpy())
-    y_test = scaler.inverse_transform(test_set[1].detach().numpy())
+    y_test = scaler.inverse_transform(original_data["x_test"].detach().numpy())
 
     figrue, axes = plt.subplots(figsize=(15, 6))
     axes.xaxis_date()
@@ -53,6 +69,5 @@ def main():
     plt.show()
 
 
-# if __name__ == "__main__":
-#     main()
-main()
+if __name__ == "__main__":
+    main()
