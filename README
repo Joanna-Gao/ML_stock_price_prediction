@@ -1,0 +1,17 @@
+Folder structure
+
+ML_stock_price_prediction/
+│
+├── data/
+│   ├── raw/             # Original, untouched datasets
+│   └── processed/       # Processed, cleaned, or feature-engineered data
+│
+├── src/
+│   ├── data_processing/
+|   |   └── data_prep.py
+│   ├── visualisation/   # Scripts or modules for creating plots, charts, etc.
+│   ├── models/          # Scripts or modules defining model architecture, training loops
+│   └── utils/           # Utility functions, helpers, configuration
+│
+├── requirements.txt     # Python dependencies (pip format)
+└── main.py              # Top-level script to orchestrate data processing, model training, evaluation
