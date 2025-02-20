@@ -6,24 +6,25 @@ import matplotlib.pyplot as plt
 
 
 def main():
-    ticker = "IBM"
-    time_period = ["2010-01-02", "2017-10-11"]
+    ticker = "COST"
+    time_period = ["2001-01-01", "2025-01-01"]
     data = load_raw_data(ticker, time_period)
 
     # normalise the data
     scaler = MinMaxScaler(feature_range=(0, 1))
     data["Ave"] = scaler.fit_transform(data["Ave"].values.reshape(-1, 1))
 
-    look_back = 500
+    batch_size = 64
+    look_back = 100
     train_loader, val_loader, test_loader, original_data = split_data(
-        data, look_back=look_back
+        data, look_back, batch_size
     )
 
     print("Obtained the data, creating model...")
 
     model_config = {
         "input_dim": 1,
-        "hidden_dim": 32,
+        "hidden_dim": 64,
         "num_layers": 2,
         "output_dim": 1,
         "num_epochs": 50,
@@ -56,16 +57,17 @@ def main():
     plt.plot(train_losses, label="Training loss")
     plt.plot(val_losses, label="Validation loss")
 
-    y_test_pred = model(original_data["x_test"])
+    x_test_tensor = to_torch_tensor(original_data["x_test"])
+    y_test_pred = model(x_test_tensor)
     y_test_pred = scaler.inverse_transform(y_test_pred.detach().numpy())
-    y_test = scaler.inverse_transform(original_data["x_test"].detach().numpy())
+    y_test = scaler.inverse_transform(original_data["y_test"])
 
     figrue, axes = plt.subplots(figsize=(15, 6))
     axes.xaxis_date()
 
     axes.plot(data.index[-len(y_test_pred) :], y_test_pred, label="Predictions")
     axes.plot(data.index[-len(y_test) :], y_test, label="True Price")
-
+    plt.legend()
     plt.show()
 
 
