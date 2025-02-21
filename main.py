@@ -1,23 +1,31 @@
+import sys
+import os
+import argparse
+import matplotlib.pyplot as plt
+
 from src.data_processing.data_prep import *
 from src.model.LSTM import LSTM
 from src.model.train import train_model
-from sklearn.preprocessing import MinMaxScaler
-import matplotlib.pyplot as plt
+from src.utils.save_meta_data import save_meta_data
+from src.visualisation.plot_utils import *
 
 
-def main():
-    ticker = "COST"
-    time_period = ["2001-01-01", "2025-01-01"]
-    data = load_raw_data(ticker, time_period)
+def get_args():
+    parser = argparse.ArgumentParser(description="LSTM model for stock prediction")
+    parser.add_argument(
+        "--ticker", type=str, default="COST", help="Ticker of the stock to predict"
+    )
+    args = parser.parse_args()
+    return args
 
-    # normalise the data
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    data["Ave"] = scaler.fit_transform(data["Ave"].values.reshape(-1, 1))
 
+def main(ticker: str):
+    time_period = ["2019-01-01", "2025-01-01"]
     batch_size = 64
     look_back = 100
-    train_loader, val_loader, test_loader, original_data = split_data(
-        data, look_back, batch_size
+
+    train_loader, val_loader, data_after_split, data, scaler_obj = get_data(
+        ticker, time_period, look_back, batch_size
     )
 
     print("Obtained the data, creating model...")
@@ -28,6 +36,7 @@ def main():
         "num_layers": 2,
         "output_dim": 1,
         "num_epochs": 50,
+        "learning_rate": 0.01,
     }
 
     model = LSTM(
@@ -37,11 +46,11 @@ def main():
         output_dim=model_config["output_dim"],
     )
     loss_fn = torch.nn.MSELoss()
-    optimiser = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimiser = torch.optim.Adam(model.parameters(), lr=model_config["learning_rate"])
 
     print("Model created, starting training...")
 
-    model, train_losses, val_losses = train_model(
+    model, train_losses, val_losses, output_dir = train_model(
         model,
         model_config,
         train_loader,
@@ -52,24 +61,20 @@ def main():
         ticker,
     )
 
+    save_meta_data(output_dir, ticker, time_period, look_back, batch_size, model_config)
+
     print("Training complete, plotting the results...")
 
-    plt.plot(train_losses, label="Training loss")
-    plt.plot(val_losses, label="Validation loss")
+    plot_train_val_losses(train_losses, val_losses)
 
-    x_test_tensor = to_torch_tensor(original_data["x_test"])
+    x_test_tensor = to_torch_tensor(data_after_split["x_test"])
     y_test_pred = model(x_test_tensor)
-    y_test_pred = scaler.inverse_transform(y_test_pred.detach().numpy())
-    y_test = scaler.inverse_transform(original_data["y_test"])
+    y_test_pred = scaler_obj.inverse_transform(y_test_pred.detach().numpy())
+    y_true = scaler_obj.inverse_transform(data["Ave"].values.reshape(-1, 1))
 
-    figrue, axes = plt.subplots(figsize=(15, 6))
-    axes.xaxis_date()
-
-    axes.plot(data.index[-len(y_test_pred) :], y_test_pred, label="Predictions")
-    axes.plot(data.index[-len(y_test) :], y_test, label="True Price")
-    plt.legend()
-    plt.show()
+    plot_predictions(data, y_test_pred, y_true)
 
 
 if __name__ == "__main__":
-    main()
+    config = get_args()
+    main(config.ticker)

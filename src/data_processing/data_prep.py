@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
+from sklearn.preprocessing import MinMaxScaler
 
 
 def load_raw_data(
@@ -22,6 +23,11 @@ def load_raw_data(
     # calculate a mean to use as the stock price everyday
     data["Ave"] = (data["High"] + data["Low"]) / 2
 
+    # normalise the data
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaler_obj = scaler.fit(data["Ave"].values.reshape(-1, 1))
+    data["Ave"] = scaler_obj.transform(data["Ave"].values.reshape(-1, 1))
+
     # remove useless columns
     data = data.drop(
         columns=["Open", "High", "Low", "Close", "Volume", "Dividends", "Stock Splits"],
@@ -33,7 +39,7 @@ def load_raw_data(
             "costco_ave_stock_price_%s_to_%s" % (time_period[0], time_period[1])
         )
 
-    return data
+    return data, scaler_obj
 
 
 def to_torch_tensor(data: np.ndarray) -> torch.Tensor:
@@ -73,7 +79,7 @@ def split_data(
     y_test = data[validation_end:, -1, :]
 
     # Save the original datasets for plotting
-    original_data = {
+    data_after_split = {
         "x_train": x_train,
         "y_train": y_train,
         "x_validation": x_validation,
@@ -91,6 +97,16 @@ def split_data(
 
     train_loader = create_loader(x_train, y_train, batch_size=batch_size)
     validation_loader = create_loader(x_validation, y_validation, batch_size=batch_size)
-    test_loader = create_loader(x_test, y_test, batch_size=batch_size)
+    # test_loader = create_loader(x_test, y_test, batch_size=batch_size)
 
-    return train_loader, validation_loader, test_loader, original_data
+    return train_loader, validation_loader, data_after_split
+
+
+def get_data(ticker: str, time_period: List[str], look_back: int, batch_size: int):
+    original_data, scaler_obj = load_raw_data(ticker, time_period)
+
+    train_loader, val_loader, data_after_split = split_data(
+        original_data, look_back, batch_size
+    )
+
+    return train_loader, val_loader, data_after_split, original_data, scaler_obj

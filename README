@@ -1,20 +1,26 @@
+This project is a stock price prediction model using LSTM neural networks. The model is trained 
+on historical stock price data and predicts the future stock price of a given company.
+
 Folder structure
 
 ML_stock_price_prediction/
 │
 ├── data/
-│   ├── raw/             # Original, untouched datasets
-│   └── processed/       # Processed, cleaned, or feature-engineered data
 │
+├── output/
+|
 ├── src/
 │   ├── data_processing/
 |   |   └── data_prep.py
-│   ├── visualisation/   # Scripts or modules for creating plots, charts, etc.
-|   |   └── plot_utils.py
 │   ├── models/
 |   |   ├── LSTM.py
 │   |   └── train.py
-│   └── utils/           # Utility functions, helpers, configuration
+│   ├── utils/
+|   |   ├── param_tuner.py
+|   |   ├── save_meta_data.py
+|   |   └── tuning_util.py
+│   └── visualisation/  
+|       └── plot_utils.py
 │
 ├── requirements.txt     # Python dependencies (pip format)
 └── main.py              # Top-level script to orchestrate data processing, model training, evaluation

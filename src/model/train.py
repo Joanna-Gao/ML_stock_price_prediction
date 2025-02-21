@@ -16,6 +16,7 @@ def train_model(
     look_back: int,
     ticker: str = "",
     patience: int = 50,
+    is_tuning: bool = False,
 ) -> (nn.Module, np.ndarray):
 
     train_losses = np.zeros(config["num_epochs"])
@@ -29,6 +30,9 @@ def train_model(
         model.train()
         running_train_loss = 0.0
         for x_batch, y_batch in train_loader:
+            # Move data to GPU if available (optional)
+            # x_batch, y_batch = x_batch.cuda(), y_batch.cuda()
+
             # forward pass
             y_train_pred = model(x_batch)
             loss = loss_fn(y_train_pred, y_batch)
@@ -48,6 +52,7 @@ def train_model(
         running_val_loss = 0.0
         with torch.no_grad():
             for x_val, y_val in val_loader:
+                # x_val, y_val = x_val.cuda(), y_val.cuda()  # if using GPU
                 y_val_pred = model(x_val)
                 loss = loss_fn(y_val_pred, y_val)
                 running_val_loss += loss.item()
@@ -77,18 +82,22 @@ def train_model(
                 f"Val Loss: {val_loss_epoch:.5f}"
             )
 
-    # Create a folder based on the current time
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = f"output/{ticker}_{current_time}"
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = None
+    if not is_tuning:
+        # Create a folder based on the current time
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = f"output/{ticker}_{current_time}"
+        os.makedirs(output_dir, exist_ok=True)
 
-    torch.save(
-        model.state_dict(), f"{output_dir}/{config['num_epochs']}_epochs_lstm.pth"
-    )
-    np.save(
-        f"{output_dir}/{config['num_epochs']}_epochs_train_loss_hist.npy",
-        train_losses,
-    )
-    np.save(f"{output_dir}/{config['num_epochs']}_epochs_val_loss_hist.npy", val_losses)
+        torch.save(
+            model.state_dict(), f"{output_dir}/{config['num_epochs']}_epochs_lstm.pth"
+        )
+        np.save(
+            f"{output_dir}/{config['num_epochs']}_epochs_train_loss_hist.npy",
+            train_losses,
+        )
+        np.save(
+            f"{output_dir}/{config['num_epochs']}_epochs_val_loss_hist.npy", val_losses
+        )
 
-    return model, train_losses, val_losses
+    return model, train_losses, val_losses, output_dir
